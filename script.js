@@ -1,9 +1,3 @@
-// Ensure Firebase is loaded for viewer count only
-if (typeof firebase === 'undefined') {
-    alert('Firebase SDK not loaded. Please check your internet connection or script tags.');
-    throw new Error('Firebase not loaded');
-}
-
 // Firebase Configuration (for viewer count only)
 const firebaseConfig = {
     apiKey: "AIzaSyDPxnvaYapJ4BO2h7PoKw435amJ6i-qYOc",
@@ -30,11 +24,13 @@ const config = {
         { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
         { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' }
-    ]
+    ],
+    iceTransportPolicy: 'all',
+    iceCandidatePoolSize: 10
 };
 
-// WebSocket connection (replace with your server URL after setup)
-const socket = new WebSocket('ws://localhost:8080'); // Local testing server
+// WebSocket connection (public echo server for testing, replace with production server)
+const socket = new WebSocket('wss://echo.websocket.org');
 
 socket.onopen = () => console.log('WebSocket connected');
 socket.onerror = (err) => console.error('WebSocket error:', err);
@@ -100,6 +96,8 @@ async function startScreenShare() {
                     candidate: event.candidate,
                     role: 'admin'
                 }));
+            } else {
+                console.log('Admin ICE gathering complete');
             }
         };
 
@@ -116,7 +114,7 @@ async function startScreenShare() {
             const data = JSON.parse(event.data);
             if (data.type === 'answer' && peerConnection) {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
-                console.log('Answer received and set: ', data.answer);
+                console.log('Answer received: ', data.answer);
                 alert('Answer received');
             } else if (data.type === 'icecandidate' && peerConnection) {
                 await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
@@ -126,6 +124,9 @@ async function startScreenShare() {
 
         peerConnection.onconnectionstatechange = () => {
             console.log('Admin connection state: ', peerConnection.connectionState);
+            if (peerConnection.connectionState === 'connected') {
+                console.log('Admin connected to viewer');
+            }
         };
 
     } catch (err) {
@@ -160,6 +161,8 @@ function startViewer() {
                 candidate: event.candidate,
                 role: 'viewer'
             }));
+        } else {
+            console.log('Viewer ICE gathering complete');
         }
     };
 
@@ -185,6 +188,9 @@ function startViewer() {
 
     peerConnection.onconnectionstatechange = () => {
         console.log('Viewer connection state: ', peerConnection.connectionState);
+        if (peerConnection.connectionState === 'connected') {
+            console.log('Viewer connected to admin');
+        }
     };
 }
 
