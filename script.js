@@ -56,6 +56,9 @@ function checkPassword() {
 // Start Screen Share (Admin)
 async function startScreenShare() {
     try {
+        console.log('Start Screen Share clicked');
+        alert('Starting screen share process');
+
         // Clean up existing stream and connection
         if (localStream) {
             localStream.getTracks().forEach(track => track.stop());
@@ -66,15 +69,24 @@ async function startScreenShare() {
             peerConnection = null;
         }
 
-        // Reset Firebase stream data
-        await streamRef.remove();
-        alert('Firebase stream data reset for new session');
+        // Reset Firebase stream data (with error handling)
+        try {
+            await streamRef.remove();
+            console.log('Firebase stream data reset');
+            alert('Firebase stream data reset');
+        } catch (err) {
+            alert('Failed to reset Firebase stream data: ' + err.message);
+            console.error('Reset error:', err);
+            // Continue anyway to ensure stream starts
+        }
 
         // Get screen share stream
         localStream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
             audio: true
         });
+        console.log('Screen share stream obtained');
+        alert('Screen share stream obtained');
 
         const videoElement = document.getElementById('admin-preview');
         videoElement.srcObject = localStream;
@@ -82,9 +94,11 @@ async function startScreenShare() {
         // Initialize WebRTC
         peerConnection = new RTCPeerConnection(config);
         localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
+        console.log('Tracks added to peer connection');
 
         const offer = await peerConnection.createOffer();
         await peerConnection.setLocalDescription(offer);
+        console.log('Offer created and set');
 
         // Push offer to Firebase
         await streamRef.set({
@@ -93,6 +107,7 @@ async function startScreenShare() {
                 sdp: offer.sdp
             }
         });
+        console.log('Offer sent to Firebase');
         alert('Offer sent to Firebase');
 
         peerConnection.onicecandidate = (event) => {
@@ -108,6 +123,7 @@ async function startScreenShare() {
             if (data.answer && peerConnection) {
                 try {
                     await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    console.log('Answer received and set');
                     alert('Answer received and set');
                 } catch (err) {
                     alert('Error setting remote description: ' + err);
@@ -138,13 +154,17 @@ function startViewer() {
 
     peerConnection.ontrack = (event) => {
         videoElement.srcObject = event.streams[0];
+        console.log('Viewer received stream track');
         alert('Viewer received stream track');
     };
 
     // Register viewer in Firebase
     const viewerId = viewersRef.push().key;
     viewersRef.child(viewerId).set({ connected: true })
-        .then(() => alert('Viewer registered in Firebase'))
+        .then(() => {
+            console.log('Viewer registered in Firebase');
+            alert('Viewer registered in Firebase');
+        })
         .catch(err => alert('Error registering viewer: ' + err));
     viewersRef.child(viewerId).onDisconnect().remove();
 
@@ -153,6 +173,7 @@ function startViewer() {
         if (data && data.offer && !peerConnection.currentRemoteDescription) {
             try {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                console.log('Viewer set remote description');
                 alert('Viewer set remote description');
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
@@ -160,10 +181,13 @@ function startViewer() {
                 streamRef.child('answer').set({
                     type: answer.type,
                     sdp: answer.sdp
-                }).then(() => alert('Answer sent to Firebase'))
-                  .catch(err => alert('Error sending answer: ' + err));
+                }).then(() => {
+                    console.log('Answer sent to Firebase');
+                    alert('Answer sent to Firebase');
+                }).catch(err => alert('Error sending answer: ' + err));
             } catch (err) {
                 alert('Error in viewer setup: ' + err);
+                console.error('Viewer setup error:', err);
             }
         }
     });
@@ -194,6 +218,7 @@ function updateViewerCount() {
         console.log('Viewer count updated to: ' + viewerCount);
     }, (err) => {
         alert('Error fetching viewer count: ' + err);
+        console.error('Viewer count error:', err);
     });
 }
 
