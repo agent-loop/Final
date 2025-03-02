@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Screen Share App</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="role-selection">
+        <h2>Are you a Viewer or Admin?</h2>
+        <button onclick="selectRole('viewer')">Viewer</button>
+        <button onclick="selectRole('admin')">Admin</button>
+    </div>
+
+    <div id="admin-login" style="display: none;">
+        <h2>Admin Login</h2>
+        <input type="password" id="admin-password" placeholder="Enter admin password">
+        <button onclick="checkPassword()">Login</button>
+    </div>
+
+    <div id="admin-stream" style="display: none;">
+        <h2>Admin Streaming Panel</h2>
+        <button onclick="startScreenShare()">Start Screen Share</button>
+        <video id="admin-preview" autoplay muted></video>
+        <div id="viewer-count">Viewers: 0</div>
+    </div>
+
+    <div id="viewer-stream" style="display: none;">
+        <video id="viewer-video" autoplay controlsList="nodownload noremoteplayback" oncontextmenu="return false;"></video>
+        <button onclick="toggleFullscreen()">Fullscreen</button>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
