@@ -27,8 +27,10 @@ let peerConnection = null;
 const config = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' },
         { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' } // Additional TURN
+        { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' } // TCP fallback
     ]
 };
 
@@ -84,9 +86,8 @@ async function startScreenShare() {
         videoElement.srcObject = localStream;
         console.log('Preview video set');
 
-        streamRef.remove()
-            .then(() => console.log('Firebase stream data reset'))
-            .catch(err => console.error('Firebase reset failed:', err));
+        await streamRef.remove();
+        console.log('Firebase stream data reset');
 
         peerConnection = new RTCPeerConnection(config);
         localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
@@ -116,6 +117,14 @@ async function startScreenShare() {
                     });
             } else {
                 console.log('Admin ICE gathering complete');
+            }
+        };
+
+        // Force ICE gathering
+        peerConnection.onicegatheringstatechange = () => {
+            console.log('Admin ICE gathering state: ', peerConnection.iceGatheringState);
+            if (peerConnection.iceGatheringState === 'complete') {
+                console.log('Admin ICE gathering finished');
             }
         };
 
@@ -223,6 +232,14 @@ function startViewer() {
                 });
         } else {
             console.log('Viewer ICE gathering complete');
+        }
+    };
+
+    // Force ICE gathering
+    peerConnection.onicegatheringstatechange = () => {
+        console.log('Viewer ICE gathering state: ', peerConnection.iceGatheringState);
+        if (peerConnection.iceGatheringState === 'complete') {
+            console.log('Viewer ICE gathering finished');
         }
     };
 
