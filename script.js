@@ -28,10 +28,13 @@ const config = {
     iceServers: [
         { urls: 'stun:stun.l.google.com:19302' },
         { urls: 'stun:stun1.l.google.com:19302' },
+        { urls: 'stun:stun2.l.google.com:19302' },
         { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
         { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' } // TCP fallback
-    ]
+        { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+    ],
+    iceTransportPolicy: 'all', // Force use of all available ICE transports
+    iceCandidatePoolSize: 10 // Pre-gather candidates
 };
 
 // Role Selection
@@ -93,19 +96,7 @@ async function startScreenShare() {
         localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
         console.log('Tracks added to peer connection');
 
-        const offer = await peerConnection.createOffer();
-        await peerConnection.setLocalDescription(offer);
-        console.log('Offer created and set: ', offer);
-
-        await streamRef.set({
-            offer: {
-                type: offer.type,
-                sdp: offer.sdp
-            }
-        });
-        console.log('Offer sent to Firebase');
-        alert('Offer sent to Firebase');
-
+        // Set ICE candidate handler *before* creating offer
         peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
                 console.log('Admin ICE candidate generated: ', event.candidate);
@@ -120,13 +111,34 @@ async function startScreenShare() {
             }
         };
 
-        // Force ICE gathering
+        const offer = await peerConnection.createOffer();
+        await peerConnection.setLocalDescription(offer);
+        console.log('Offer created and set: ', offer);
+
+        await streamRef.set({
+            offer: {
+                type: offer.type,
+                sdp: offer.sdp
+            }
+        });
+        console.log('Offer sent to Firebase');
+        alert('Offer sent to Firebase');
+
+        // Monitor ICE gathering state
         peerConnection.onicegatheringstatechange = () => {
             console.log('Admin ICE gathering state: ', peerConnection.iceGatheringState);
             if (peerConnection.iceGatheringState === 'complete') {
                 console.log('Admin ICE gathering finished');
             }
         };
+
+        // Timeout to check if ICE gathering is stuck
+        setTimeout(() => {
+            if (peerConnection.iceGatheringState !== 'complete') {
+                console.log('Admin ICE gathering timeout - still in state: ', peerConnection.iceGatheringState);
+                alert('ICE gathering taking too long - check network or servers');
+            }
+        }, 10000); // 10 seconds
 
         streamRef.on('child_added', async (snapshot) => {
             const data = snapshot.val();
@@ -185,6 +197,21 @@ function startViewer() {
         .catch(err => alert('Error registering viewer: ' + err));
     viewersRef.child(viewerId).onDisconnect().remove();
 
+    // Set ICE candidate handler *before* setting remote description
+    peerConnection.onicecandidate = (event) => {
+        if (event.candidate) {
+            console.log('Viewer ICE candidate generated: ', event.candidate);
+            streamRef.child('viewerIceCandidates').push(event.candidate)
+                .then(() => console.log('Viewer ICE candidate sent to Firebase'))
+                .catch(err => {
+                    console.error('Error sending viewer ICE candidate: ', err);
+                    alert('Error sending viewer ICE candidate: ' + err.message);
+                });
+        } else {
+            console.log('Viewer ICE gathering complete');
+        }
+    };
+
     streamRef.on('value', async (snapshot) => {
         const data = snapshot.val();
         if (data && data.offer && !peerConnection.currentRemoteDescription) {
@@ -221,27 +248,21 @@ function startViewer() {
         }
     });
 
-    peerConnection.onicecandidate = (event) => {
-        if (event.candidate) {
-            console.log('Viewer ICE candidate generated: ', event.candidate);
-            streamRef.child('viewerIceCandidates').push(event.candidate)
-                .then(() => console.log('Viewer ICE candidate sent to Firebase'))
-                .catch(err => {
-                    console.error('Error sending viewer ICE candidate: ', err);
-                    alert('Error sending viewer ICE candidate: ' + err.message);
-                });
-        } else {
-            console.log('Viewer ICE gathering complete');
-        }
-    };
-
-    // Force ICE gathering
+    // Monitor ICE gathering state
     peerConnection.onicegatheringstatechange = () => {
         console.log('Viewer ICE gathering state: ', peerConnection.iceGatheringState);
         if (peerConnection.iceGatheringState === 'complete') {
             console.log('Viewer ICE gathering finished');
         }
     };
+
+    // Timeout to check if ICE gathering is stuck
+    setTimeout(() => {
+        if (peerConnection.iceGatheringState !== 'complete') {
+            console.log('Viewer ICE gathering timeout - still in state: ', peerConnection.iceGatheringState);
+            alert('Viewer ICE gathering taking too long - check network or servers');
+        }
+    }, 10000); // 10 seconds
 
     peerConnection.onconnectionstatechange = () => {
         console.log('Viewer connection state: ', peerConnection.connectionState);
