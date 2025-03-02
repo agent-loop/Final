@@ -13,7 +13,7 @@ const firebaseConfig = {
     messagingSenderId: "252523208229",
     appId: "1:252523208229:web:15b6e19a8c597b6edd69cc",
     measurementId: "G-1Y9EBEKM9E",
-    databaseURL: "https://screenshareapp-2a85f-default-rtdb.firebaseio.com/"
+    databaseURL: "https://screenshareapp-2a85f-default-rtdb.asia-southeast1.firebasedatabase.app/"
 };
 
 // Initialize Firebase
@@ -63,24 +63,16 @@ async function startScreenShare() {
         if (localStream) {
             localStream.getTracks().forEach(track => track.stop());
             localStream = null;
+            console.log('Existing stream stopped');
         }
         if (peerConnection) {
             peerConnection.close();
             peerConnection = null;
+            console.log('Existing peer connection closed');
         }
 
-        // Reset Firebase stream data (with error handling)
-        try {
-            await streamRef.remove();
-            console.log('Firebase stream data reset');
-            alert('Firebase stream data reset');
-        } catch (err) {
-            alert('Failed to reset Firebase stream data: ' + err.message);
-            console.error('Reset error:', err);
-            // Continue anyway to ensure stream starts
-        }
-
-        // Get screen share stream
+        // Get screen share stream (isolated to test prompt)
+        console.log('Requesting screen share permission');
         localStream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
             audio: true
@@ -90,6 +82,15 @@ async function startScreenShare() {
 
         const videoElement = document.getElementById('admin-preview');
         videoElement.srcObject = localStream;
+        console.log('Preview video set');
+
+        // Reset Firebase stream data (non-blocking)
+        streamRef.remove()
+            .then(() => console.log('Firebase stream data reset'))
+            .catch(err => {
+                console.error('Failed to reset Firebase stream data:', err);
+                alert('Firebase reset failed: ' + err.message + ' (continuing anyway)');
+            });
 
         // Initialize WebRTC
         peerConnection = new RTCPeerConnection(config);
