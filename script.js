@@ -22,7 +22,7 @@ const db = firebase.database();
 const streamRef = db.ref('stream');
 const viewersRef = db.ref('viewers');
 
-let localStream = null; // Initialize explicitly
+let localStream = null;
 let peerConnection = null;
 const config = {
     iceServers: [
@@ -66,6 +66,10 @@ async function startScreenShare() {
             peerConnection = null;
         }
 
+        // Reset Firebase stream data
+        await streamRef.remove();
+        alert('Firebase stream data reset for new session');
+
         // Get screen share stream
         localStream = await navigator.mediaDevices.getDisplayMedia({
             video: true,
@@ -89,10 +93,13 @@ async function startScreenShare() {
                 sdp: offer.sdp
             }
         });
+        alert('Offer sent to Firebase');
 
         peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
-                streamRef.child('iceCandidates').push(event.candidate).catch(err => alert('Error sending ICE candidate: ' + err));
+                streamRef.child('iceCandidates').push(event.candidate)
+                    .then(() => console.log('ICE candidate sent'))
+                    .catch(err => alert('Error sending ICE candidate: ' + err));
             }
         };
 
@@ -101,6 +108,7 @@ async function startScreenShare() {
             if (data.answer && peerConnection) {
                 try {
                     await peerConnection.setRemoteDescription(new RTCSessionDescription(data.answer));
+                    alert('Answer received and set');
                 } catch (err) {
                     alert('Error setting remote description: ' + err);
                 }
@@ -110,7 +118,9 @@ async function startScreenShare() {
         streamRef.child('viewerIceCandidates').on('child_added', (snapshot) => {
             if (peerConnection) {
                 const candidate = new RTCIceCandidate(snapshot.val());
-                peerConnection.addIceCandidate(candidate).catch(err => alert('Error adding viewer ICE candidate: ' + err));
+                peerConnection.addIceCandidate(candidate)
+                    .then(() => console.log('Viewer ICE candidate added'))
+                    .catch(err => alert('Error adding viewer ICE candidate: ' + err));
             }
         });
 
@@ -128,11 +138,14 @@ function startViewer() {
 
     peerConnection.ontrack = (event) => {
         videoElement.srcObject = event.streams[0];
+        alert('Viewer received stream track');
     };
 
     // Register viewer in Firebase
     const viewerId = viewersRef.push().key;
-    viewersRef.child(viewerId).set({ connected: true }).catch(err => alert('Error registering viewer: ' + err));
+    viewersRef.child(viewerId).set({ connected: true })
+        .then(() => alert('Viewer registered in Firebase'))
+        .catch(err => alert('Error registering viewer: ' + err));
     viewersRef.child(viewerId).onDisconnect().remove();
 
     streamRef.on('value', async (snapshot) => {
@@ -140,13 +153,15 @@ function startViewer() {
         if (data && data.offer && !peerConnection.currentRemoteDescription) {
             try {
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
+                alert('Viewer set remote description');
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
 
                 streamRef.child('answer').set({
                     type: answer.type,
                     sdp: answer.sdp
-                }).catch(err => alert('Error sending answer: ' + err));
+                }).then(() => alert('Answer sent to Firebase'))
+                  .catch(err => alert('Error sending answer: ' + err));
             } catch (err) {
                 alert('Error in viewer setup: ' + err);
             }
@@ -156,13 +171,17 @@ function startViewer() {
     streamRef.child('iceCandidates').on('child_added', (snapshot) => {
         if (peerConnection) {
             const candidate = new RTCIceCandidate(snapshot.val());
-            peerConnection.addIceCandidate(candidate).catch(err => alert('Error adding admin ICE candidate: ' + err));
+            peerConnection.addIceCandidate(candidate)
+                .then(() => console.log('Admin ICE candidate added'))
+                .catch(err => alert('Error adding admin ICE candidate: ' + err));
         }
     });
 
     peerConnection.onicecandidate = (event) => {
         if (event.candidate) {
-            streamRef.child('viewerIceCandidates').push(event.candidate).catch(err => alert('Error sending viewer ICE candidate: ' + err));
+            streamRef.child('viewerIceCandidates').push(event.candidate)
+                .then(() => console.log('Viewer ICE candidate sent'))
+                .catch(err => alert('Error sending viewer ICE candidate: ' + err));
         }
     };
 }
@@ -172,6 +191,7 @@ function updateViewerCount() {
     viewersRef.on('value', (snapshot) => {
         const viewerCount = snapshot.numChildren();
         document.getElementById('viewer-count').textContent = `Viewers: ${viewerCount}`;
+        console.log('Viewer count updated to: ' + viewerCount);
     }, (err) => {
         alert('Error fetching viewer count: ' + err);
     });
